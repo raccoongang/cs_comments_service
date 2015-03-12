@@ -114,3 +114,16 @@ get "#{APIPREFIX}/courses/*/stats"  do |course_id| # retrieve stats by course
     course_stats.to_json
   end
 end
+
+get "#{APIPREFIX}/threads/:thread_id/num_followers" do |thread_id|
+  begin
+    exclude_user_id = 0
+    if params.has_key?("exclude_user_id")
+      exclude_user_id = Integer(params["exclude_user_id"])
+    end
+    thread_followers = {
+      "num_followers" => Subscription.where(:subscriber_id.ne => exclude_user_id, source_id: thread_id).count()
+    }
+    thread_followers.to_json
+  end
+end

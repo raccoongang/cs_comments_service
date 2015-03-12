@@ -16,17 +16,6 @@ get "#{APIPREFIX}/threads" do # retrieve threads by course
       {:group_id.exists => false},
     )
   end
-  #if a group id is sent, then process the set of threads with that group id or with no group id
-  group_ids = get_group_ids_from_params(params)
-  exclude_groups = value_to_boolean(params['exclude_groups'])
-  if exclude_groups
-    threads = threads.where({"group_id" => {"$exists" => false}})
-  elsif not group_ids.empty?
-    threads = threads.any_of(
-      {:group_id.in => group_ids},
-      {:group_id.exists => false},
-    )
-  end
 
   handle_threads_query(
     threads,

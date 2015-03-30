@@ -186,6 +186,15 @@ def _user_social_stats(user_id, params)
       user_stats[user._id]["num_threads_read"] = user.read_states.find_by(:course_id => course_id).last_read_times.length
     end
 
+    # Get the number of threads read by each user.
+    users = User.only([:_id, :read_states]).where("read_states.course_id" => course_id)
+    users.each do |user|
+      if user_stats.key?(user._id) == false then
+        set_template_result(user._id, user_stats, thread_ids)
+      end
+      user_stats[user._id]["num_threads_read"] = user.read_states.find_by(:course_id => course_id).last_read_times.length
+    end
+
     user_stats.to_json
   end
 end

@@ -81,7 +81,7 @@ post "#{APIPREFIX}/users/:user_id/read" do |user_id|
   user.reload.to_hash.to_json
 end
 
-get "#{APIPREFIX}/users/:user_id/social_stats" do |user_id|
+def _user_social_stats(user_id, params)
   begin
     return {}.to_json if not params["course_id"]
 
@@ -90,6 +90,7 @@ get "#{APIPREFIX}/users/:user_id/social_stats" do |user_id|
     thread_type = params["thread_type"]
 
     course_id = params["course_id"]
+    thread_ids_filter = params["thread_ids"].split(",") if params["thread_ids"]
 
     user_stats = {}
     thread_ids = {}
@@ -124,13 +125,16 @@ get "#{APIPREFIX}/users/:user_id/social_stats" do |user_id|
     # as we don't need it and we shouldn't push all that data over the wire
     content = Content.where(content_selector).without(:body)
 
-    if thread_type
+    if thread_type || thread_ids_filter
       thread_selector = {course_id: course_id, anonymous: false, anonymous_to_peers: false}
       if end_date
         thread_selector[:created_at.lte] = end_date
       end
       if thread_type
         thread_selector["thread_type"] = thread_type
+      end
+      if thread_ids_filter
+        thread_selector[:commentable_id.in] = thread_ids_filter
       end
 
       target_threads = CommentThread.where(thread_selector).only(:_id).map(&:_id)
@@ -184,6 +188,14 @@ get "#{APIPREFIX}/users/:user_id/social_stats" do |user_id|
 
     user_stats.to_json
   end
+end
+
+get "#{APIPREFIX}/users/:user_id/social_stats" do |user_id|
+  _user_social_stats(user_id, params)
+end
+
+post "#{APIPREFIX}/users/:user_id/social_stats" do |user_id|
+  _user_social_stats(user_id, params)
 end
 
 

@@ -80,7 +80,7 @@ describe 'app' do
           rs = thread_result course_id: "omg", group_ids: "100,101"
           rs.length.should == 2
           rs.each_with_index { |res, i|
-            check_thread_result_json(nil, @threads["t#{i+1}"], res)
+            check_thread_result_json(nil, @threads["t#{2-i}"], res)
             res["course_id"].should == "omg"
           }
         end

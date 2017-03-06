@@ -27,7 +27,8 @@ get "#{APIPREFIX}/:commentable_id/threads" do |commentable_id|
     params["sort_key"],
     params["sort_order"],
     params["page"],
-    params["per_page"]
+    params["per_page"],
+    params["context"] ? params["context"] : :course
   ).to_json
 end
 
@@ -41,6 +42,10 @@ post "#{APIPREFIX}/:commentable_id/threads" do |commentable_id|
   if params["group_id"]
     thread.group_id = params["group_id"]
   end
+
+  if params["context"]
+    thread.context = params["context"]
+  end
   
   thread.author = user
   thread.save
@@ -49,6 +54,8 @@ post "#{APIPREFIX}/:commentable_id/threads" do |commentable_id|
   else
     user.subscribe(thread) if bool_auto_subscribe
     presenter = ThreadPresenter.factory(thread, nil)
-    presenter.to_hash.to_json
+    thread = presenter.to_hash
+    thread["resp_total"] = 0
+    thread.to_json
   end
 end

@@ -10,13 +10,23 @@ helpers do
     raise ArgumentError, t(:user_id_is_required) unless @user || params[:user_id]
     @user ||= User.find_by(external_id: params[:user_id])
   end
-  
+
   def thread
     @thread ||= CommentThread.find(params[:thread_id])
   end
 
   def comment
     @comment ||= Comment.find(params[:comment_id])
+  end
+
+  def verify_or_fix_cached_comment_count(comment, comment_hash)
+    # if child count cached value gets stale; re-calculate and update it
+    unless comment_hash["children"].nil?
+      if comment_hash["child_count"] != comment_hash["children"].length
+        comment.update_cached_child_count
+        comment_hash["child_count"] = comment.get_cached_child_count
+      end
+    end
   end
 
   def source
@@ -46,7 +56,7 @@ helpers do
     obj.save
     obj.reload.to_hash.to_json
   end
-  
+
   def un_flag_as_abuse(obj)
     raise ArgumentError, t(:user_id_is_required) unless user
     if params["all"]
@@ -56,7 +66,7 @@ helpers do
     else
       obj.abuse_flaggers.delete user.id
     end
-    
+
     obj.save
     obj.reload.to_hash.to_json
   end
@@ -68,7 +78,7 @@ helpers do
     end
     obj.reload.to_hash.to_json
   end
-  
+
 
   def pin(obj)
     raise ArgumentError, t(:user_id_is_required) unless user
@@ -76,16 +86,16 @@ helpers do
     obj.save
     obj.reload.to_hash.to_json
   end
-  
+
   def unpin(obj)
     raise ArgumentError, t(:user_id_is_required) unless user
     obj.pinned = nil
     obj.save
     obj.reload.to_hash.to_json
-  end  
-  
-  
-  
+  end
+
+
+
   def value_to_boolean(value)
     !!(value.to_s =~ /^true$/i)
   end
@@ -129,11 +139,17 @@ helpers do
     sort_key,
     sort_order,
     page,
-    per_page
+    per_page,
+    context=:course
   )
 
+    context_threads = comment_threads.where({:context => context})
+
     if not group_ids.empty?
-      comment_threads = get_group_id_criteria(comment_threads, group_ids)
+      group_threads = get_group_id_criteria(comment_threads, group_ids)
+      comment_threads = comment_threads.all_of(context_threads.selector, group_threads.selector)
+    else
+      comment_threads = context_threads
     end
 
     if filter_flagged
@@ -142,7 +158,7 @@ helpers do
         comment_ids = Comment.where(:course_id => course_id).
           where(:abuse_flaggers.ne => [], :abuse_flaggers.exists => true).
           collect{|c| c.comment_thread_id}.uniq
-          
+
         thread_ids = comment_threads.where(:abuse_flaggers.ne => [], :abuse_flaggers.exists => true).
           collect{|c| c.id}
 
@@ -155,7 +171,7 @@ helpers do
         endorsed_thread_ids = Comment.where(:course_id => course_id).
           where(:parent_id.exists => false, :endorsed => true).
           collect{|c| c.comment_thread_id}.uniq
-          
+
         comment_threads = comment_threads.where({"thread_type" => :question}).nin({"_id" => endorsed_thread_ids})
       end
     end
@@ -184,27 +200,24 @@ helpers do
         to_skip = (page - 1) * per_page
         has_more = false
         # batch_size is used to cap the number of documents we might load into memory at any given time
-        # TODO: starting with Mongoid 3.1, you can just do comment_threads.batch_size(size).each()
-        comment_threads.query.batch_size(CommentService.config["manual_pagination_batch_size"].to_i)
-        Mongoid.unit_of_work(disable: :current) do # this is to prevent Mongoid from memoizing every document we look at
-          comment_threads.each do |thread|
-            thread_key = thread._id.to_s
-            if !read_dates.has_key?(thread_key) || read_dates[thread_key] < thread.last_activity_at
-              if skipped >= to_skip
-                if threads.length == per_page
-                  has_more = true
-                  break
-                end
-                threads << thread
-              else
-                skipped += 1
+        comment_threads.batch_size(CommentService.config["manual_pagination_batch_size"].to_i).each do |thread|
+         thread_key = thread._id.to_s
+          if !read_dates.has_key?(thread_key) || read_dates[thread_key] < thread.last_activity_at
+            if skipped >= to_skip
+              if threads.length == per_page
+                has_more = true
+                break
               end
+              threads << thread
+            else
+              skipped += 1
             end
           end
         end
+
         # The following trick makes frontend pagers work without recalculating
         # the number of all unread threads per user on every request (since the number
-        # of threads in a course could be tens or hundreds of thousands).  It has the 
+        # of threads in a course could be tens or hundreds of thousands).  It has the
         # effect of showing that there's always just one more page of results, until
         # there definitely are no more pages.  This is really only acceptable for pagers
         # that don't actually reveal the total number of pages to the user onscreen.
@@ -213,16 +226,16 @@ helpers do
         # let the installed paginator library handle pagination
         num_pages = [1, (comment_threads.count / per_page.to_f).ceil].max
         page = [1, page].max
-        threads = comment_threads.page(page).per(per_page).to_a
+        threads = comment_threads.paginate(:page => page, :per_page => per_page).to_a
       end
-      
+
       if threads.length == 0
         collection = []
       else
         pres_threads = ThreadListPresenter.new(threads, request_user, course_id)
         collection = pres_threads.to_hash
       end
-      {collection: collection, num_pages: num_pages, page: page}
+      {collection: collection, num_pages: num_pages, page: page, thread_count: comment_threads.count}
     end
   end
 
@@ -315,11 +328,11 @@ helpers do
       current_thread = thread_map[c.comment_thread_id]
 
       #do not include threads or comments who have current or historical abuse flags
-      if current_thread.abuse_flaggers.to_a.empty? and 
-        current_thread.historical_abuse_flaggers.to_a.empty? and 
-        c.abuse_flaggers.to_a.empty? and 
+      if current_thread.abuse_flaggers.to_a.empty? and
+        current_thread.historical_abuse_flaggers.to_a.empty? and
+        c.abuse_flaggers.to_a.empty? and
         c.historical_abuse_flaggers.to_a.empty?
-        
+
           user_ids = subscriptions_map[c.comment_thread_id.to_s]
           user_ids.each do |u|
             if not notification_map.keys.include? u
@@ -362,14 +375,14 @@ helpers do
     rescue
       # body was nil, or the hash function failed somehow - never mind
       return
-    end  
+    end
     if CommentService.blocked_hashes.include? hash then
-      msg = t(:blocked_content_with_body_hash, :hash => hash) 
+      msg = t(:blocked_content_with_body_hash, :hash => hash)
       logger.warn msg
       error 503, [msg].to_json
     end
   end
-  
+
   include ::NewRelic::Agent::MethodTracer
   add_method_tracer :user
   add_method_tracer :thread

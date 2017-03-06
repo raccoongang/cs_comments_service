@@ -40,7 +40,7 @@ get "#{APIPREFIX}/users/:user_id/active_threads" do |user_id|
     thread_ids
   end
 
-  threads = CommentThread.in({"_id" => active_thread_ids})
+  threads = CommentThread.course_context.in({"_id" => active_thread_ids})
 
   group_ids = get_group_ids_from_params(params)
   if not group_ids.empty?
@@ -76,6 +76,11 @@ put "#{APIPREFIX}/users/:user_id" do |user_id|
   else
     user.to_hash.to_json
   end
+end
+
+post "#{APIPREFIX}/users/:user_id/read" do |user_id|
+  user.mark_as_read(source)
+  user.reload.to_hash.to_json
 end
 
 def _user_social_stats(user_id, params)
@@ -138,7 +143,7 @@ def _user_social_stats(user_id, params)
       content = content.select do |c|
         (c._type == "CommentThread" && c.thread_type == thread_type) || target_threads.include?(c.comment_thread_id)
       end
-    end    
+    end
 
     content.each do |item|
       user_id = item.author_id

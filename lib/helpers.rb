@@ -77,7 +77,7 @@ helpers do
     end
     obj.reload.to_hash.to_json
   end
-
+  
   def pin(obj)
     raise ArgumentError, t(:user_id_is_required) unless user
     obj.pinned = true
@@ -91,7 +91,7 @@ helpers do
     obj.save
     obj.reload.to_hash.to_json
   end
-
+  
   def value_to_boolean(value)
     !!(value.to_s =~ /^true$/i)
   end

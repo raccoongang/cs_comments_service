@@ -591,7 +591,6 @@ describe 'app' do
         response["num_active_threads"].should == 3
       end
 
-
       def test_unicode_data(text)
         thread = create(:comment_thread, body: text)
         create(:comment, comment_thread: thread, body: text)

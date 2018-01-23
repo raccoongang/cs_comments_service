@@ -10,7 +10,14 @@ post "#{APIPREFIX}/users" do
 end
 
 delete "#{APIPREFIX}/users/:user_id" do |user_id|
-  user = User.find_or_create_by(username:  params["username"])
+  Mongoid.raise_not_found_error = false
+  user = User.find(user_id)
+  if user.nil?
+    user = User.find(username:  params["username"])
+  end
+  if user.nil?
+    error 400, "User dose not exist"
+  end
   user.delete
   if user.errors.any?
     error 400, user.errors.full_messages.to_json

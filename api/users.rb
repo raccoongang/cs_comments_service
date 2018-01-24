@@ -9,6 +9,23 @@ post "#{APIPREFIX}/users" do
   end
 end
 
+delete "#{APIPREFIX}/users/:user_id" do |user_id|
+  Mongoid.raise_not_found_error = false
+  user = User.find(user_id)
+  if user.nil?
+    user = User.find(username:  params["username"])
+  end
+  if user.nil?
+    error 400, "User dose not exist"
+  end
+  user.delete
+  if user.errors.any?
+    error 400, user.errors.full_messages.to_json
+  else
+    user.to_hash.to_json
+  end
+end
+
 get "#{APIPREFIX}/users/:user_id" do |user_id|
   begin
     # Get any group_ids that may have been specified (will be an empty list if none specified).

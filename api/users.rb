@@ -13,7 +13,7 @@ delete "#{APIPREFIX}/users/:user_id" do |user_id|
   Mongoid.raise_not_found_error = false
   user = User.find(user_id)
   if user.nil?
-    user = User.find(username:  params["username"])
+    user = User.find_by(username:  params["username"])
   end
   if user.nil?
     error 400, "User dose not exist"

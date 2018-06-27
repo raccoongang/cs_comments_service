@@ -1,6 +1,11 @@
 post "#{APIPREFIX}/users" do
-  user = User.new(external_id: params["id"])
-  user.username = params["username"]
+  user = User.find(username:  params["username"])
+  if user.nil?
+    user = User.new(external_id: params["id"])
+    user.username = params["username"]
+  else
+    user.external_id = params["id"]
+  end
   user.save
   if user.errors.any?
     error 400, user.errors.full_messages.to_json
@@ -13,7 +18,7 @@ delete "#{APIPREFIX}/users/:user_id" do |user_id|
   Mongoid.raise_not_found_error = false
   user = User.find(user_id)
   if user.nil?
-    user = User.find_by(username:  params["username"])
+    user = User.where(username:  params["username"]).first
   end
   if user.nil?
     error 400, "User dose not exist"
@@ -30,7 +35,11 @@ get "#{APIPREFIX}/users/:user_id" do |user_id|
   begin
     # Get any group_ids that may have been specified (will be an empty list if none specified).
     group_ids = get_group_ids_from_params(params)
-    user.to_hash(complete: bool_complete, course_id: params["course_id"], group_ids: group_ids).to_json
+    if user.nil?
+      error 404
+    else
+      user.to_hash(complete: bool_complete, course_id: params["course_id"], group_ids: group_ids).to_json
+    end
   rescue Mongoid::Errors::DocumentNotFound
     error 404
   end

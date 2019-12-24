@@ -359,6 +359,81 @@ helpers do
     notification_map.to_json
   end
 
+  def broad_notifications_by_date_range_and_user_ids_with_courses(
+    start_date_time, end_date_time, users_with_courses
+  )
+    #unique course ids set to process:
+    users_courses = Set[]
+    #hash {user_id => [user_course_id]}
+    subscribers_map = {}
+    users_with_courses.each do |u|
+      user_id, courses_str = u.split("::")
+      courses = courses_str.split(",")
+      subscribers_map[user_id] = courses
+      users_courses.merge(courses)
+    end
+
+    #given a date range, a user and her courses, find all of the notifiable content
+    #key by thread id, and return notification messages for each user
+
+    #first, find the courses related thread ids for the users
+    thread_ids = CommentThread.where(:course_id.in => users_courses.to_a).collect{|t| t.id.to_s}
+
+    #find all the comments
+    comments = Comment.by_date_range_and_thread_ids start_date_time, end_date_time, thread_ids
+
+    #and get the threads too, b/c we'll need them for the title
+    thread_map = Hash[CommentThread.where(:_id.in => thread_ids).all.map { |t| [t.id, t] }]
+
+    #notification map will be user => course => thread => [comment bodies]
+    notification_map = {}
+
+    comments.each do |c|
+      current_thread = thread_map[c.comment_thread_id]
+
+      #do not include threads or comments who have current or historical abuse flags
+      if current_thread.abuse_flaggers.to_a.empty? and
+        current_thread.historical_abuse_flaggers.to_a.empty? and
+        c.abuse_flaggers.to_a.empty? and
+        c.historical_abuse_flaggers.to_a.empty?
+
+          user_ids = subscribers_map.keys
+          user_ids.each do |u|
+            if not notification_map.keys.include? u
+              notification_map[u] = {}
+            end
+
+            #skip if the user isn't enrolled to the course:
+            next if !subscribers_map[u].include?(c.course_id)
+
+            if not notification_map[u].keys.include? c.course_id
+              notification_map[u][c.course_id] = {}
+            end
+
+            if not notification_map[u][c.course_id].include? c.comment_thread_id.to_s
+              t = notification_map[u][c.course_id][c.comment_thread_id.to_s] = {}
+              t["content"] = []
+              t["title"] = current_thread.title
+              t["commentable_id"] = current_thread.commentable_id
+              unless current_thread.group_id.nil?
+                t["group_id"] = current_thread.group_id
+              end
+            else
+              t = notification_map[u][c.course_id][c.comment_thread_id.to_s]
+            end
+
+            content_obj = {}
+            content_obj["username"] = c.author_with_anonymity(:username, t(:anonymous))
+            content_obj["updated_at"] = c.updated_at
+            content_obj["body"] = c.body
+            t["content"] << content_obj
+          end
+      end
+    end
+
+    notification_map.to_json
+  end
+
   def filter_blocked_content body
     begin
       normalized_body = body.strip.downcase.gsub(/[^a-z ]/, '').gsub(/\s+/, ' ')

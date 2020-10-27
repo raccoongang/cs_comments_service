@@ -7,7 +7,7 @@ gem 'pry-nav'
 
 gem 'bundler'
 
-gem 'rake'
+gem 'rake', '10.4.2'
 
 gem 'sinatra'
 
@@ -20,9 +20,9 @@ gem 'bson_ext'
 gem 'protected_attributes'
 
 gem 'delayed_job'
-gem 'delayed_job_mongoid'
+gem 'delayed_job_mongoid', '2.2.0'
 
-gem "enumerize"
+gem "enumerize", '0.11.0'
 gem 'mongoid-tree', :git => 'https://github.com/macdiesel/mongoid-tree'
 gem 'rs_voteable_mongo', :git => 'https://github.com/navneet35371/voteable_mongo.git'
 gem 'mongoid_magic_counter_cache'
@@ -37,12 +37,13 @@ gem 'tire-contrib'
 gem 'dalli'
 
 gem 'rest-client'
+gem 'json', '1.8.3'
 
 group :test do
   gem 'codecov', :git => 'https://github.com/codecov/codecov-ruby.git', :ref => 'v0.1.20', :require => false
   gem 'mongoid_cleaner', '~> 1.2.0'
   gem 'factory_girl', '~> 4.0'
-  gem 'faker', '~> 1.6'
+  gem 'faker', '1.6.1'
   gem 'guard'
   gem 'guard-unicorn'
   gem 'rack-test', :require => 'rack/test'
@@ -52,7 +53,7 @@ end
 # FIXME Remove version restriction once ruby upgraded to 2.x
 gem 'newrelic_rpm', '~> 3.16.0'
 gem 'unicorn'
-gem "rack-timeout"
+gem "rack-timeout", '0.3.2'
 gem "i18n"
 gem "rack-contrib", :git => 'https://github.com/rack/rack-contrib.git', :ref => '6ff3ca2b2d988911ca52a2712f6a7da5e064aa27'
 
